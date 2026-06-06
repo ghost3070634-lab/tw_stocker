@@ -86,15 +86,6 @@ jobs:
           if [ -d "artifacts" ]; then
             find artifacts/ -type f -mtime +180 -delete 2>/dev/null || true
           fi
-
-      - name: Commit and push
-        run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          git add.
-          git diff --staged --quiet || git commit -m "🤖 AI Report v8.5 + Paper Trading $(date -u +%Y-%m-%d)"
-          git pull --rebase --strategy-option=theirs origin main || true
-          git push
       - name: Discord Notify with Picks
         if: success()
         run: |
@@ -119,6 +110,20 @@ jobs:
   quarterly-health-check:
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
+
+      - name: Commit and push
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "🤖 AI Report v8.5 + Paper Trading $(date -u +%Y-%m-%d)"
+            git fetch origin main
+            git rebase -X theirs origin/main
+            git push origin HEAD:main
+          fi
 
     steps:
       - name: Check if quarterly (first week of Jan/Apr/Jul/Oct)
