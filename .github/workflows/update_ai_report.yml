@@ -35,7 +35,7 @@ on:
 
 # 防止多個 run 同時 push 造成 race condition
 concurrency:
-  group: ai-report-main
+  group: ai-report-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
