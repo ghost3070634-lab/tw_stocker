@@ -126,12 +126,16 @@ jobs:
                       out.append(f"{cols[0]} {cols[1]} 收{cols[2]}")
               print('\n'.join(out) if out else "今日無選股")
           EOF
-            )
+          )
           else
             PICKS="今日無選股-找不到stock_report.html"
             DATE=$(date -u +%Y-%m-%d)
           fi
-          jq -n --arg content "**tw_stocker 每日選股 ${DATE}**\n\`\`\`\n${PICKS}\n\`\`\`\n[完整回測報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)" '{content: $content}' | \
+          jq -n --arg content "**tw_stocker 每日選股 ${DATE}**
+          \`\`\`
+          ${PICKS}
+          \`\`\`
+          [完整回測報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)" '{content: $content}' | \
           curl -s -H "Content-Type: application/json" -X POST -d @- ${{ secrets.DISCORD_WEBHOOK }}
 
       - name: Discord Notify - 進出場詳細版 v8.5
@@ -167,8 +171,12 @@ jobs:
             PICKS="今日無選股-找不到stock_report.html"
             DATE=$(date -u +%Y-%m-%d)
           fi
-          jq -n --arg content "**tw_stocker 進出場訊號 v8.5 ${DATE}**\n\`\`\`\n${PICKS}\n\`\`\`\n[完整回測報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)" '{content: $content}' | \
-          curl -s -H "Content-Type: application/json" -X POST -d @- ${{ secrets.DISCORD_WEBHOOK_TRADING }} 
+          jq -n --arg content "**tw_stocker 每日選股 ${DATE}**
+          \`\`\`
+          ${PICKS}
+          \`\`\`
+          [完整回測報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)" '{content: $content}' | \
+          curl -s -H "Content-Type: application/json" -X POST -d @- ${{ secrets.DISCORD_WEBHOOK }}
           
       - name: Check if quarterly (first week of Jan/Apr/Jul/Oct)
         id: check
