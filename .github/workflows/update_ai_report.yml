@@ -109,22 +109,26 @@ jobs:
           if [ -f "stock_report.html" ]; then
             DATE=$(date -u +%Y-%m-%d)
             PICKS=$(python3 << 'EOF'
-          import re
+          import re, html as h
           with open('stock_report.html', 'r', encoding='utf-8') as f:
-              html = f.read()
-          # v8.5 新格式: 每檔股票在 <tr class="stock-row"> 裡面
-          rows = re.findall(r'<tr class="stock-row">(.*?)</tr>', html, re.S)[:7]
-          lines = []
-          for row in rows:
-              cols = re.findall(r'<td.*?>(.*?)</td>', row)
-              if len(cols) >= 3:
-                  sid, name, score = cols[0], cols[1], cols[2]
-                  lines.append(f"{sid} {name} {score}")
-          print('\n'.join(lines) if lines else "今日無選股")
+              txt = f.read()
+          # 找「今日 AI 交易執行單」後的第一個 tbody
+          m = re.search(r'今日 AI 交易執行單.*?<tbody>(.*?)</tbody>', txt, re.S)
+          if not m:
+              print("今日無選股-找不到表格")
+          else:
+              rows = re.findall(r'<tr>(.*?)</tr>', m.group(1), re.S)
+              out = []
+              for r in rows[:7]: # 取前7檔
+                  cols = [h.unescape(re.sub('<.*?>', '', c)).strip() for c in re.findall(r'<td.*?>(.*?)</td>', r, re.S)]
+                  # cols: 0代號 1評分 2收盤 3狀態
+                  if len(cols) >= 3:
+                      out.append(f"{cols[0]} {cols[1]} 收{cols[2]}")
+              print('\n'.join(out) if out else "今日無選股")
           EOF
             )
           else
-            PICKS="今日無選股"
+            PICKS="今日無選股-找不到stock_report.html"
             DATE=$(date -u +%Y-%m-%d)
           fi
           jq -n --arg content "**tw_stocker 每日選股 ${DATE}**\n\`\`\`\n${PICKS}\n\`\`\`\n[完整回測報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)" '{content: $content}' | \
@@ -136,20 +140,27 @@ jobs:
           if [ -f "stock_report.html" ]; then
             DATE=$(date -u +%Y-%m-%d)
             PICKS=$(python3 << 'EOF'
-          import re
+          import re, html as h
           with open('stock_report.html', 'r', encoding='utf-8') as f:
-              html = f.read()
-          # v8.5 表格有 7 欄: 代號 名稱 分數 昨收 TP SL GAP
-          rows = re.findall(r'<tr class="stock-row">(.*?)</tr>', html, re.S)[:7]
-          lines = []
-          for row in rows:
-              cols = re.findall(r'<td.*?>(.*?)</td>', row)
-              if len(cols) >= 7:
-                  sid, name, score, close, tp, sl, gap = cols[:7]
-                  lines.append(f"{sid} {name} | 分數:{score}")
-                  lines.append(f" 昨收:{close} | 停利:{tp} | 停損:{sl}")
-                  lines.append(f" 跳空>{gap}不買 | 最多抱20日\n")
-          print('\n'.join(lines) if lines else "今日無選股-解析失敗")
+              txt = f.read()
+          m = re.search(r'今日 AI 交易執行單.*?<tbody>(.*?)</tbody>', txt, re.S)
+          if not m:
+              print("今日無選股-解析失敗")
+          else:
+              rows = re.findall(r'<tr>(.*?)</tr>', m.group(1), re.S)
+              out = []
+              for r in rows[:7]:
+                  cols = [h.unescape(re.sub('<.*?>', '', c)).strip() for c in re.findall(r'<td.*?>(.*?)</td>', r, re.S)]
+                  # cols: 0代號 1評分 2收盤 3狀態 4區間計畫(內含停利停損)
+                  if len(cols) >= 5:
+                      plan = cols[4]
+                      tp = re.search(r'停利[:：]\s*([\d\.]+)', plan)
+                      sl = re.search(r'停損[:：]\s*([\d\.]+)', plan)
+                      tp = tp.group(1) if tp else "?"
+                      sl = sl.group(1) if sl else "?"
+                      out.append(f"{cols[0]} {cols[1]} | 分數:{cols[1]}")
+                      out.append(f" 收盤:{cols[2]} | 停利:{tp} | 停損:{sl}\n")
+              print('\n'.join(out) if out else "今日無選股-解析失敗")
           EOF
             )
           else
@@ -157,7 +168,8 @@ jobs:
             DATE=$(date -u +%Y-%m-%d)
           fi
           jq -n --arg content "**tw_stocker 進出場訊號 v8.5 ${DATE}**\n\`\`\`\n${PICKS}\n\`\`\`\n[完整回測報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)" '{content: $content}' | \
-          curl -s -H "Content-Type: application/json" -X POST -d @- ${{ secrets.DISCORD_WEBHOOK_TRADING }}
+          curl -s -H "Content-Type: application/json" -X POST -d @- ${{ secrets.DISCORD_WEBHOOK_TRADING }} 
+          
       - name: Check if quarterly (first week of Jan/Apr/Jul/Oct)
         id: check
         run: |
