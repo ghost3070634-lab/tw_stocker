@@ -89,17 +89,17 @@ jobs:
       - name: Discord Notify with Picks
         if: always()
         run: |
-          FILE=$(ls artifacts/picks_*.csv 2>/dev/null | tail -1)
-          if [ -f "$FILE" ]; then
-            PICKS=$(head -6 "$FILE" | tail -5 | awk -F',' '{print $2" "$3}' | sed ':a;N;$!ba;s/\n/\\n/g')
+          if [ -f "stock_report.html" ]; then
+            # 抓 <td> 裡面的股票代號跟名稱，通常在 table 裡
+            PICKS=$(grep -oP '<td>\d{4}</td><td>[^<]+</td>' stock_report.html | head -5 | sed 's/<td>//g' | sed 's/<\/td>/ /g' | sed ':a;N;$!ba;s/\n/\\n/g')
             if [ -z "$PICKS" ]; then
-              PICKS="今日無選股"
+              PICKS="今日無選股-解析HTML失敗"
             fi
           else
-            PICKS="今日無選股"
+            PICKS="今日無選股-找不到stock_report.html"
           fi
+          
           curl -s -H "Content-Type: application/json" -X POST -d '{"content":"**tw_stocker 每日選股**\n```\n'"$PICKS"'\n```\n[完整報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)"}' ${{ secrets.DISCORD_WEBHOOK }}
-
       - name: Commit and push
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
