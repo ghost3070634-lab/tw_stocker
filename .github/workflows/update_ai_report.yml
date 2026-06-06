@@ -86,21 +86,54 @@ jobs:
           if [ -d "artifacts" ]; then
             find artifacts/ -type f -mtime +180 -delete 2>/dev/null || true
           fi
-      - name: Discord Notify with Picks
+      - name: Discord Notify - 簡單版
         if: always()
         run: |
+          # 發到舊頻道，只給代號分數
           if [ -f "stock_report.html" ]; then
-            # 抓 <td> 裡面的股票代號跟名稱，通常在 table 裡
-            PICKS=$(grep -oP '<td>\d{4}</td><td>[^<]+</td>' stock_report.html | head -5 | sed 's/<td>//g' | sed 's/<\/td>/ /g' | sed ':a;N;$!ba;s/\n/\\n/g')
-            if [ -z "$PICKS" ]; then
-              PICKS="今日無選股-解析HTML失敗"
-            fi
+            PICKS=$(grep -oP '<tr>\s*<td>\d{4}</td>\s*<td>[^<]+</td>\s*<td>[0-9.]+</td>' stock_report.html | sed 's/<tr>//g' | sed 's/<td>/ /g' | sed 's/<\/td>//g' | sed 's/^[ \t]*//' | head -7)
           else
-            PICKS="今日無選股-找不到stock_report.html"
+            PICKS="今日無選股"
+          fi
+          curl -s -H "Content-Type: application/json" -X POST -d '{"content":"**tw_stocker 每日選股**\n```\n'"$PICKS"'\n```"}' ${{ secrets.DISCORD_WEBHOOK }}
+
+      - name: Discord Notify - 進出場詳細版
+        if: always()
+        run: |
+          # 發到新頻道，附TP/SL/GAP
+          if [ -f "stock_report.html" ] && [ -f "ai_quant.db" ]; then
+            PICKS=$(python3 << 'EOF'
+          import sqlite3
+          conn = sqlite3.connect('ai_quant.db')
+          cur = conn.cursor()
+          query = '''
+            SELECT p.stock_id, s.name, p.score, d.close, d.atr
+            FROM picks p
+            JOIN stocks s ON p.stock_id = s.stock_id
+            JOIN daily_data d ON p.stock_id = d.stock_id
+            WHERE p.date = (SELECT MAX(date) FROM picks)
+            AND d.date = (SELECT MAX(date) FROM daily_data WHERE date <= p.date)
+            ORDER BY p.score DESC LIMIT 7
+          '''
+          rows = cur.execute(query).fetchall()
+          lines = []
+          for sid, name, score, close, atr in rows:
+              if not atr: continue
+              tp = round(close + 4.0 * atr, 2)
+              sl = round(close - 3.0 * atr, 2)
+              gap = round(1.5 * atr, 2)
+              lines.append(f"{sid} {name} | 分數:{score:.2f}")
+              lines.append(f"  買:明開盤 | 停利:{tp} | 停損:{sl}")
+              lines.append(f"  跳空>{gap}不買 | 最多抱20日")
+              lines.append("")
+          print('\\n'.join(lines) if lines else "今日無選股")
+          EOF
+            )
+          else
+            PICKS="今日無選股-找不到資料"
           fi
           
-          curl -s -H "Content-Type: application/json" -X POST -d '{"content":"**tw_stocker 每日選股**\n```\n'"$PICKS"'\n```\n[完整報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)"}' ${{ secrets.DISCORD_WEBHOOK }}
-      - name: Commit and push
+          curl -s -H "Content-Type: application/json" -X POST -d '{"content":"**tw_stocker 進出場訊號 v8.5**\n```\n'"$PICKS"'\n```\n[完整回測報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)"}' ${{ secrets.DISCORD_WEBHOOK_TRADING }}      - name: Commit and push
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
