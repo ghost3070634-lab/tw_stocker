@@ -106,7 +106,26 @@ jobs:
           git rebase --autostash origin/main
 
           git push origin HEAD:main
-
+      - name: Discord Notify with Picks
+        if: success()
+        run: |
+          # 抓今日選股，沒有就顯示無
+          FILE=$(ls artifacts/picks_*.csv 2>/dev/null | tail -1)
+          if [ -f "$FILE" ]; then
+            PICKS=$(head -6 "$FILE" | tail -5 | awk -F',' '{print $2" "$3}' | sed ':a;N;$!ba;s/\n/\\n/g')
+            if [ -z "$PICKS" ]; then
+              PICKS="今日無選股"
+            fi
+          else
+            PICKS="今日無選股"
+          fi
+        
+          curl -H "Content-Type: application/json" \
+          -X POST \
+          -d '{
+            "content": "**今日選股**\n```\n'"$PICKS"'\n```\n[完整報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)"
+          }' \
+          ${{ secrets.DISCORD_WEBHOOK }}
   # 每季第一週自動跑 sweep + Monte Carlo + Walk-Forward
   quarterly-health-check:
     runs-on: ubuntu-latest
@@ -176,23 +195,4 @@ jobs:
 
           git push origin HEAD:main
           
-      - name: Discord Notify with Picks
-        if: success()
-        run: |
-          # 抓今日選股，沒有就顯示無
-          FILE=$(ls artifacts/picks_*.csv 2>/dev/null | tail -1)
-          if [ -f "$FILE" ]; then
-            PICKS=$(head -6 "$FILE" | tail -5 | awk -F',' '{print $2" "$3}' | sed ':a;N;$!ba;s/\n/\\n/g')
-            if [ -z "$PICKS" ]; then
-              PICKS="今日無選股"
-            fi
-          else
-            PICKS="今日無選股"
-          fi
-        
-          curl -H "Content-Type: application/json" \
-          -X POST \
-          -d '{
-            "content": "**今日選股**\n```\n'"$PICKS"'\n```\n[完整報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)"
-          }' \
-          ${{ secrets.DISCORD_WEBHOOK }}
+
