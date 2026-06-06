@@ -236,9 +236,9 @@ jobs:
           fi
 
           # Rebase onto latest remote without downloading the full repository history.
-          git fetch --no-tags --depth=50 origin main:refs/remotes/origin/main
-          git rebase --autostash origin/main
+          git fetch --no-tags --depth=50 origin ${{ github.ref_name }}:refs/remotes/origin/${{ github.ref_name }}
+          git rebase --autostash origin/${{ github.ref_name }}
 
-          git push origin HEAD:main
+          git push origin HEAD:${{ github.ref_name }}
           
 
