@@ -176,7 +176,7 @@ jobs:
           ${PICKS}
           \`\`\`
           [完整回測報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)" '{content: $content}' | \
-          curl -s -H "Content-Type: application/json" -X POST -d @- ${{ secrets.DISCORD_WEBHOOK }}
+          curl -s -H "Content-Type: application/json" -X POST -d @- ${{ secrets.DISCORD_WEBHOOK_TRADING }}
           
       - name: Check if quarterly (first week of Jan/Apr/Jul/Oct)
         id: check
