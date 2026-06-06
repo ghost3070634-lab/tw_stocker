@@ -175,3 +175,29 @@ jobs:
           git rebase --autostash origin/main
 
           git push origin HEAD:main
+      - name: Discord Notify
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            STATUS="✅ 成功"
+          else
+            STATUS="❌ 失敗"
+          fi
+        
+          curl -H "Content-Type: application/json" \
+          -X POST \
+          -d '{
+            "username": "tw_stocker",
+            "embeds": [{
+              "title": "台股回測日報",
+              "description": "狀態: '"$STATUS"'",
+              "color": 5814783,
+              "fields": [
+                {"name": "日期", "value": "'$(date +%Y-%m-%d)'", "inline": true},
+                {"name": "報表連結", "value": "[點我查看](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)"}
+              ],
+              "footer": {"text": "GitHub Actions"}
+            }]
+          }' \
+          ${{ secrets.DISCORD_WEBHOOK }}   
+          
