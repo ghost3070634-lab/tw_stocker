@@ -86,43 +86,78 @@ jobs:
           if [ -d "artifacts" ]; then
             find artifacts/ -type f -mtime +180 -delete 2>/dev/null || true
           fi
+      - name: Commit and push
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "🤖 AI Report $(date -u +%Y-%m-%d)"
+            git fetch origin main
+            git rebase -X theirs origin/main
+            git push origin HEAD:main
+          fi
+
+      - name: Wait for GitHub Pages Deploy
+        run: sleep 30 # 等 30 秒讓 Pages 更新完
+
       - name: Discord Notify - 簡單版
         if: always()
         run: |
           if [ -f "stock_report.html" ]; then
-            # v8.5 html 格式: 代號 名稱 分數 昨收 TP SL GAP
-            PICKS=$(grep -oP '<td>\d{4}</td><td>[^<]+</td><td>[0-9.]+</td>' stock_report.html | sed 's/<td>/ /g; s/<\/td>//g' | head -7)
+            DATE=$(date -u +%Y-%m-%d)
+            PICKS=$(python3 << 'EOF'
+          import re
+          with open('stock_report.html', 'r', encoding='utf-8') as f:
+              html = f.read()
+          # v8.5 新格式: 每檔股票在 <tr class="stock-row"> 裡面
+          rows = re.findall(r'<tr class="stock-row">(.*?)</tr>', html, re.S)[:7]
+          lines = []
+          for row in rows:
+              cols = re.findall(r'<td.*?>(.*?)</td>', row)
+              if len(cols) >= 3:
+                  sid, name, score = cols[0], cols[1], cols[2]
+                  lines.append(f"{sid} {name} {score}")
+          print('\n'.join(lines) if lines else "今日無選股")
+          EOF
+            )
           else
             PICKS="今日無選股"
+            DATE=$(date -u +%Y-%m-%d)
           fi
-          curl -s -H "Content-Type: application/json" -X POST -d '{"content":"**tw_stocker 每日選股**\n```\n'"$PICKS"'\n```"}' ${{ secrets.DISCORD_WEBHOOK }}
+          jq -n --arg content "**tw_stocker 每日選股 ${DATE}**\n\`\`\`\n${PICKS}\n\`\`\`\n[完整回測報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)" '{content: $content}' | \
+          curl -s -H "Content-Type: application/json" -X POST -d @- ${{ secrets.DISCORD_WEBHOOK }}
 
       - name: Discord Notify - 進出場詳細版 v8.5
         if: always()
         run: |
           if [ -f "stock_report.html" ]; then
-            # 一次抓 7 欄: 代號 名稱 分數 昨收 TP SL GAP上限
+            DATE=$(date -u +%Y-%m-%d)
             PICKS=$(python3 << 'EOF'
           import re
           with open('stock_report.html', 'r', encoding='utf-8') as f:
               html = f.read()
-          # 抓 <tr> 裡面 7 個 <td>
-          pattern = r'<td>(\d{4})</td><td>([^<]+)</td><td>([0-9.]+)</td><td>([0-9.]+)</td><td>([0-9.]+)</td><td>([0-9.]+)</td><td>([0-9.]+)</td>'
-          matches = re.findall(pattern, html)[:7]
+          # v8.5 表格有 7 欄: 代號 名稱 分數 昨收 TP SL GAP
+          rows = re.findall(r'<tr class="stock-row">(.*?)</tr>', html, re.S)[:7]
           lines = []
-          for sid, name, score, close, tp, sl, gap in matches:
-              lines.append(f"{sid} {name} | 分數:{score}")
-              lines.append(f"  買:明開盤 | 停利:{tp} | 停損:{sl}")
-              lines.append(f"  跳空>{gap}不買 | 最多抱20日\n")
+          for row in rows:
+              cols = re.findall(r'<td.*?>(.*?)</td>', row)
+              if len(cols) >= 7:
+                  sid, name, score, close, tp, sl, gap = cols[:7]
+                  lines.append(f"{sid} {name} | 分數:{score}")
+                  lines.append(f" 昨收:{close} | 停利:{tp} | 停損:{sl}")
+                  lines.append(f" 跳空>{gap}不買 | 最多抱20日\n")
           print('\n'.join(lines) if lines else "今日無選股-解析失敗")
           EOF
             )
           else
             PICKS="今日無選股-找不到stock_report.html"
+            DATE=$(date -u +%Y-%m-%d)
           fi
-          
-          curl -s -H "Content-Type: application/json" -X POST -d '{"content":"**tw_stocker 進出場訊號 v8.5**\n```\n'"$PICKS"'\n```\n[完整回測報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)"}' ${{ secrets.DISCORD_WEBHOOK_TRADING }}
-
+          jq -n --arg content "**tw_stocker 進出場訊號 v8.5 ${DATE}**\n\`\`\`\n${PICKS}\n\`\`\`\n[完整回測報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)" '{content: $content}' | \
+          curl -s -H "Content-Type: application/json" -X POST -d @- ${{ secrets.DISCORD_WEBHOOK_TRADING }}
       - name: Check if quarterly (first week of Jan/Apr/Jul/Oct)
         id: check
         run: |
