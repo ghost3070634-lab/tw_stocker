@@ -87,9 +87,8 @@ jobs:
             find artifacts/ -type f -mtime +180 -delete 2>/dev/null || true
           fi
       - name: Discord Notify with Picks
-        if: success()
+        if: always()
         run: |
-          # 抓今日選股，沒有就顯示無
           FILE=$(ls artifacts/picks_*.csv 2>/dev/null | tail -1)
           if [ -f "$FILE" ]; then
             PICKS=$(head -6 "$FILE" | tail -5 | awk -F',' '{print $2" "$3}' | sed ':a;N;$!ba;s/\n/\\n/g')
@@ -99,17 +98,7 @@ jobs:
           else
             PICKS="今日無選股"
           fi
-        
-          curl -H "Content-Type: application/json" \
-          -X POST \
-          -d '{
-            "content": "**今日選股**\n```\n'"$PICKS"'\n```\n[完整報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)"
-          }' \
-          ${{ secrets.DISCORD_WEBHOOK }}
-  # 每季第一週自動跑 sweep + Monte Carlo + Walk-Forward
-  quarterly-health-check:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
+          curl -s -H "Content-Type: application/json" -X POST -d '{"content":"**tw_stocker 每日選股**\n```\n'"$PICKS"'\n```\n[完整報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)"}' ${{ secrets.DISCORD_WEBHOOK }}
 
       - name: Commit and push
         run: |
@@ -117,15 +106,14 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git add -A
           if git diff --staged --quiet; then
-            echo "No changes to commit"
+            echo "No changes"
           else
-            git commit -m "🤖 AI Report v8.5 + Paper Trading $(date -u +%Y-%m-%d)"
+            git commit -m "🤖 AI Report $(date -u +%Y-%m-%d)"
             git fetch origin main
             git rebase -X theirs origin/main
             git push origin HEAD:main
           fi
 
-    steps:
       - name: Check if quarterly (first week of Jan/Apr/Jul/Oct)
         id: check
         run: |
