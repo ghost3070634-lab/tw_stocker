@@ -95,9 +95,9 @@ jobs:
             echo "No changes"
           else
             git commit -m "🤖 AI Report $(date -u +%Y-%m-%d)"
-            git fetch origin main
-            git rebase -X theirs origin/main
-            git push origin HEAD:main
+            git fetch origin ${{ github.ref_name }}
+            git rebase -X theirs origin/${{ github.ref_name }}
+            git push origin HEAD:${{ github.ref_name }}
           fi
 
       - name: Wait for GitHub Pages Deploy
@@ -236,9 +236,9 @@ jobs:
           fi
 
           # Rebase onto latest remote without downloading the full repository history.
-          git fetch --no-tags --depth=50 origin main:refs/remotes/origin/main
+          git fetch --no-tags --depth=50 origin ${{ github.ref_name }}:refs/remotes/origin/${{ github.ref_name }}
           git rebase --autostash origin/main
 
-          git push origin HEAD:main
+          git push origin HEAD:${{ github.ref_name }}
           
 
