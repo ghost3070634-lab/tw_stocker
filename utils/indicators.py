@@ -69,25 +69,38 @@ def calc_zentrend_full(df):
 
 # ========= 指標計算函數 ========= #
 def calc_indicators(df):
-    """tw_stocker 傳進來的 df，index 已經是 date"""
-    g = df.copy()
-    if len(g) < 100:
-        return g
-
-    # 週線 EMA，注意欄位改 close
-    g_w = g['close'].resample('W-FRI').last().dropna()
-    g['EMA5_W'] = g_w.ewm(span=5, adjust=False).mean().shift(1).reindex(g.index, method='ffill')
-    g['EMA21_W'] = g_w.ewm(span=21, adjust=False).mean().shift(1).reindex(g.index, method='ffill')
-    g['EMA89_W'] = g_w.ewm(span=89, adjust=False).mean().shift(1).reindex(g.index, method='ffill')
-
-    g['EMA34'] = g['close'].ewm(span=34, adjust=False).mean()
-    g['STD34'] = g['close'].rolling(34).std()
-    g['VOL_MA5'] = g['volume'].rolling(5).sum().shift(1)
-    g['RET_8W'] = g['close'] / g['close'].shift(40) - 1
-    g['HIGH_3W_昨天'] = g['close'].shift(2).rolling(15).max()
-    g['LOW_3W'] = g['close'].shift(1).rolling(15).min()
-
-    return g
+    # 確保 index 是 datetime
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df.index = pd.to_datetime(df.index)
+    
+    # 日線 EMA
+    df['EMA34'] = df['close'].ewm(span=34, adjust=False).mean()
+    
+    # 34日標準差，classify_stock_state 會用到
+    df['STD34'] = df['close'].rolling(34).std()
+    
+    # 3週高低點
+    df['HIGH_3W'] = df['high'].rolling(15).max() # 3週=15個交易日
+    df['LOW_3W'] = df['low'].rolling(15).min()
+    df['HIGH_3W_昨天'] = df['HIGH_3W'].shift(1)
+    
+    # 週線資料：先把日線轉週線
+    df_w = df['close'].resample('W-FRI').last().to_frame('close')
+    df_w['EMA5_W'] = df_w['close'].ewm(span=5, adjust=False).mean()
+    df_w['EMA21_W'] = df_w['close'].ewm(span=21, adjust=False).mean()
+    df_w['EMA89_W'] = df_w['close'].ewm(span=89, adjust=False).mean()
+    
+    # 8週漲幅，指定 fill_method=None 避免 warning
+    df_w['RET_8W'] = df_w['close'].pct_change(8, fill_method=None)
+    
+    # 週線 merge 回日線：用 reindex + ffill 對齊
+    df = df.join(df_w[['EMA5_W','EMA21_W','EMA89_W','RET_8W']])
+    df[['EMA5_W','EMA21_W','EMA89_W','RET_8W']] = df[['EMA5_W','EMA21_W','EMA89_W','RET_8W']].ffill()
+    
+    # 成交量 5日均
+    df['VOL_MA5'] = df['volume'].rolling(5).mean()
+    
+    return df
 
 # ========= 狀態分類函數 ========= #
 def classify_stock_state(df, ob_ratio=0.12, std_times=2.0, n_days=5):
