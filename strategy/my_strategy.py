@@ -33,7 +33,7 @@ class MyStrategy:
         # 1. 算指標，你原本的流程
         df = calc_zentrend_full(df)
         df = calc_indicators(df)
-        df = classify_stock_state(df, OB_RATIO=0.12, STD_TIMES=2.0, N_DAYS_STAND_BACK=5)
+        df = classify_stock_state(df, ob_ratio=0.12, std_times=2.0, n_days=5)
 
         # 2. 你的第1層篩選條件
         VOL_5D = 10000
