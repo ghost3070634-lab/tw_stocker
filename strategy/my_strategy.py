@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from utils.indicators import calc_zentrend_full, calc_indicators, classify_stock_state
-import config
+
 
 class MyStrategy:
     def __init__(self):
