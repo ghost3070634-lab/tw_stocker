@@ -119,11 +119,11 @@ def classify_stock_state(df, ob_ratio=0.12, std_times=2.0, n_days=5):
     g.loc[cond_行進中, '狀態'] = '行進中'
 
     return g
-       def find_pivots(high, low, depth):
-       pivots_list = []
-       for i in range(depth, len(high) - depth):
-           if high[i] == high[i-depth:i+depth+1].max():
-               pivots_list.append({'index': i, 'price': high[i], 'type': 'high'})
-           if low[i] == low[i-depth:i+depth+1].min():
-               pivots_list.append({'index': i, 'price': low[i], 'type': 'low'})
-       return sorted(pivots_list, key=lambda x: x['index'])
+def find_pivots(high, low, depth):
+    pivots_list = []
+    for i in range(depth, len(high) - depth):
+        if high[i] == high[i-depth:i+depth+1].max():
+            pivots_list.append({'index': i, 'price': high[i], 'type': 'high'})
+        if low[i] == low[i-depth:i+depth+1].min():
+            pivots_list.append({'index': i, 'price': low[i], 'type': 'low'})
+    return sorted(pivots_list, key=lambda x: x['index'])
