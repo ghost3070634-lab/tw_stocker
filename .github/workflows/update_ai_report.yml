@@ -40,6 +40,7 @@ concurrency:
 
 jobs:
   generate-report:
+    if: github.ref == 'refs/heads/MY-main-twstocker'  # 只在這個分支跑
     runs-on: ubuntu-latest
 
     steps:
