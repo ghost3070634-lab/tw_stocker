@@ -103,38 +103,34 @@ jobs:
       - name: Wait for GitHub Pages Deploy
         run: sleep 30 # 等 30 秒讓 Pages 更新完
 
+      - name: Install twstock for name lookup
+        if: always()
+        run: pip install twstock --quiet
+
       - name: Discord Notify - 簡單版
         if: always()
         run: |
           if [ -f "stock_report.html" ]; then
             DATE=$(date -u +%Y-%m-%d)
-            TODAY=$(date -u +%Y%m%d)
-            REPORT_MDATE=$(date -u -r stock_report.html +%Y%m%d 2>/dev/null || echo "00000000")
-            if [ "$REPORT_MDATE" = "$TODAY" ]; then
-              REPORT_SUFFIX=""
-            else
-              REPORT_SUFFIX="(未更動)"
-            fi
+
+            # 從 HTML 內容抓報告日期
             REPORT_DATE=$(python3 -c "
           import re
           with open('stock_report.html','r',encoding='utf-8') as f:
               txt=f.read()
-          m=re.search(r'v8\.5.*?(\d{4}-\d{2}-\d{2})', txt)
-          print(m.group(1) if m else '$(date -u +%Y-%m-%d)')
+          m=re.search(r'v8\.5[^\d]*(\d{4}-\d{2}-\d{2})', txt)
+          print(m.group(1) if m else '')
           ")
+            # 比對報告日期與今天
+            if [ "$REPORT_DATE" = "$DATE" ]; then
+              REPORT_SUFFIX=""
+            else
+              REPORT_SUFFIX="(未更動)"
+            fi
+
             PICKS=$(python3 << 'EOF'
           import re, html as h, json, os
-          from datetime import datetime, timezone, timedelta
-
-          def get_name(code):
-              try:
-                  import urllib.request
-                  url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{code}.tw"
-                  with urllib.request.urlopen(url, timeout=5) as r:
-                      data = json.loads(r.read())
-                  return data['msgArray'][0]['n']
-              except Exception:
-                  return ""
+          import twstock
 
           PICKS_FILE = "artifacts/daily_picks.json"
           yesterday_streaks = {}
@@ -155,7 +151,6 @@ jobs:
           else:
               rows = re.findall(r'<tr>(.*?)</tr>', m.group(1), re.S)
               out = []
-              today_streaks = {}
               for r in rows[:7]:
                   cols = [h.unescape(re.sub('<.*?>', '', c)).strip()
                           for c in re.findall(r'<td.*?>(.*?)</td>', r, re.S)]
@@ -163,17 +158,15 @@ jobs:
                       code = cols[0]
                       prev = yesterday_streaks.get(code, 0)
                       streak = prev + 1
-                      today_streaks[code] = streak
-                      name = get_name(code)
+                      # 從 twstock 查名稱
+                      name = ""
+                      try:
+                          name = twstock.codes[code].name if code in twstock.codes else ""
+                      except Exception:
+                          pass
                       streak_str = f"({streak})" if streak >= 2 else ""
                       display = f"{code} {name}{streak_str}".strip()
                       out.append(f"{display} {cols[1]} 收{cols[2]}")
-
-              os.makedirs("artifacts", exist_ok=True)
-              with open(PICKS_FILE, "w") as f:
-                  tz = timezone(timedelta(hours=8))
-                  json.dump({"date": datetime.now(tz).strftime("%Y-%m-%d"), "picks": today_streaks}, f)
-
               print('\n'.join(out) if out else "今日無選股")
           EOF
           )
@@ -197,33 +190,26 @@ jobs:
         run: |
           if [ -f "stock_report.html" ]; then
             DATE=$(date -u +%Y-%m-%d)
-            TODAY=$(date -u +%Y%m%d)
-            REPORT_MDATE=$(date -u -r stock_report.html +%Y%m%d 2>/dev/null || echo "00000000")
-            if [ "$REPORT_MDATE" = "$TODAY" ]; then
-              REPORT_SUFFIX=""
-            else
-              REPORT_SUFFIX="(未更動)"
-            fi
+
+            # 從 HTML 內容抓報告日期
             REPORT_DATE=$(python3 -c "
           import re
           with open('stock_report.html','r',encoding='utf-8') as f:
               txt=f.read()
-          m=re.search(r'v8\.5.*?(\d{4}-\d{2}-\d{2})', txt)
-          print(m.group(1) if m else '$(date -u +%Y-%m-%d)')
+          m=re.search(r'v8\.5[^\d]*(\d{4}-\d{2}-\d{2})', txt)
+          print(m.group(1) if m else '')
           ")
+            # 比對報告日期與今天
+            if [ "$REPORT_DATE" = "$DATE" ]; then
+              REPORT_SUFFIX=""
+            else
+              REPORT_SUFFIX="(未更動)"
+            fi
+
             PICKS=$(python3 << 'EOF'
           import re, html as h, json, os
+          import twstock
           from datetime import datetime, timezone, timedelta
-
-          def get_name(code):
-              try:
-                  import urllib.request
-                  url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{code}.tw"
-                  with urllib.request.urlopen(url, timeout=5) as r:
-                      data = json.loads(r.read())
-                  return data['msgArray'][0]['n']
-              except Exception:
-                  return ""
 
           PICKS_FILE = "artifacts/daily_picks.json"
           yesterday_streaks = {}
@@ -253,7 +239,12 @@ jobs:
                       prev = yesterday_streaks.get(code, 0)
                       streak = prev + 1
                       today_streaks[code] = streak
-                      name = get_name(code)
+                      # 從 twstock 查名稱
+                      name = ""
+                      try:
+                          name = twstock.codes[code].name if code in twstock.codes else ""
+                      except Exception:
+                          pass
                       streak_str = f"({streak})" if streak >= 2 else ""
                       display = f"{code} {name}{streak_str}".strip()
                       plan = cols[4]
@@ -264,10 +255,14 @@ jobs:
                       out.append(f"{display} | 分數:{cols[1]}")
                       out.append(f" 收盤:{cols[2]} | 停利:{tp} | 停損:{sl}\n")
 
+              # ── 只有詳細版負責寫 JSON，簡單版只讀 ──
               os.makedirs("artifacts", exist_ok=True)
               with open(PICKS_FILE, "w") as f:
                   tz = timezone(timedelta(hours=8))
-                  json.dump({"date": datetime.now(tz).strftime("%Y-%m-%d"), "picks": today_streaks}, f)
+                  json.dump({
+                      "date": datetime.now(tz).strftime("%Y-%m-%d"),
+                      "picks": today_streaks
+                  }, f)
 
               print('\n'.join(out) if out else "今日無選股-解析失敗")
           EOF
