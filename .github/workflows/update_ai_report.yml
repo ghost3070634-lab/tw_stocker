@@ -108,34 +108,88 @@ jobs:
         run: |
           if [ -f "stock_report.html" ]; then
             DATE=$(date -u +%Y-%m-%d)
+            TODAY=$(date -u +%Y%m%d)
+            REPORT_MDATE=$(date -u -r stock_report.html +%Y%m%d 2>/dev/null || echo "00000000")
+            if [ "$REPORT_MDATE" = "$TODAY" ]; then
+              REPORT_SUFFIX=""
+            else
+              REPORT_SUFFIX="(未更動)"
+            fi
+            REPORT_DATE=$(python3 -c "
+          import re
+          with open('stock_report.html','r',encoding='utf-8') as f:
+              txt=f.read()
+          m=re.search(r'v8\.5.*?(\d{4}-\d{2}-\d{2})', txt)
+          print(m.group(1) if m else '$(date -u +%Y-%m-%d)')
+          ")
             PICKS=$(python3 << 'EOF'
-          import re, html as h
+          import re, html as h, json, os
+          from datetime import datetime, timezone, timedelta
+
+          def get_name(code):
+              try:
+                  import urllib.request
+                  url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{code}.tw"
+                  with urllib.request.urlopen(url, timeout=5) as r:
+                      data = json.loads(r.read())
+                  return data['msgArray'][0]['n']
+              except Exception:
+                  return ""
+
+          PICKS_FILE = "artifacts/daily_picks.json"
+          yesterday_streaks = {}
+          if os.path.exists(PICKS_FILE):
+              try:
+                  with open(PICKS_FILE, "r") as f:
+                      saved = json.load(f)
+                  yesterday_streaks = saved.get("picks", {})
+              except Exception:
+                  pass
+
           with open('stock_report.html', 'r', encoding='utf-8') as f:
               txt = f.read()
-          # 找「今日 AI 交易執行單」後的第一個 tbody
+
           m = re.search(r'今日 AI 交易執行單.*?<tbody>(.*?)</tbody>', txt, re.S)
           if not m:
               print("今日無選股-找不到表格")
           else:
               rows = re.findall(r'<tr>(.*?)</tr>', m.group(1), re.S)
               out = []
-              for r in rows[:7]: # 取前7檔
-                  cols = [h.unescape(re.sub('<.*?>', '', c)).strip() for c in re.findall(r'<td.*?>(.*?)</td>', r, re.S)]
-                  # cols: 0代號 1評分 2收盤 3狀態
+              today_streaks = {}
+              for r in rows[:7]:
+                  cols = [h.unescape(re.sub('<.*?>', '', c)).strip()
+                          for c in re.findall(r'<td.*?>(.*?)</td>', r, re.S)]
                   if len(cols) >= 3:
-                      out.append(f"{cols[0]} {cols[1]} 收{cols[2]}")
+                      code = cols[0]
+                      prev = yesterday_streaks.get(code, 0)
+                      streak = prev + 1
+                      today_streaks[code] = streak
+                      name = get_name(code)
+                      streak_str = f"({streak})" if streak >= 2 else ""
+                      display = f"{code} {name}{streak_str}".strip()
+                      out.append(f"{display} {cols[1]} 收{cols[2]}")
+
+              os.makedirs("artifacts", exist_ok=True)
+              with open(PICKS_FILE, "w") as f:
+                  tz = timezone(timedelta(hours=8))
+                  json.dump({"date": datetime.now(tz).strftime("%Y-%m-%d"), "picks": today_streaks}, f)
+
               print('\n'.join(out) if out else "今日無選股")
           EOF
           )
           else
             PICKS="今日無選股-找不到stock_report.html"
             DATE=$(date -u +%Y-%m-%d)
+            REPORT_SUFFIX="(未更動)"
+            REPORT_DATE=$(date -u +%Y-%m-%d)
           fi
-          jq -n --arg content "**tw_stocker 每日選股 ${DATE}**
+          jq -n \
+            --arg content "**tw_stocker 每日選股 ${DATE}**
           \`\`\`
           ${PICKS}
           \`\`\`
-          [完整回測報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)" '{content: $content}' | \
+          [AI 台股量化交易 v8.5 — ${REPORT_DATE}](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)${REPORT_SUFFIX}" \
+            '{content: $content}' | \
           curl -s -H "Content-Type: application/json" -X POST -d @- ${{ secrets.DISCORD_WEBHOOK }}
 
       - name: Discord Notify - 進出場詳細版 v8.5
@@ -143,41 +197,95 @@ jobs:
         run: |
           if [ -f "stock_report.html" ]; then
             DATE=$(date -u +%Y-%m-%d)
+            TODAY=$(date -u +%Y%m%d)
+            REPORT_MDATE=$(date -u -r stock_report.html +%Y%m%d 2>/dev/null || echo "00000000")
+            if [ "$REPORT_MDATE" = "$TODAY" ]; then
+              REPORT_SUFFIX=""
+            else
+              REPORT_SUFFIX="(未更動)"
+            fi
+            REPORT_DATE=$(python3 -c "
+          import re
+          with open('stock_report.html','r',encoding='utf-8') as f:
+              txt=f.read()
+          m=re.search(r'v8\.5.*?(\d{4}-\d{2}-\d{2})', txt)
+          print(m.group(1) if m else '$(date -u +%Y-%m-%d)')
+          ")
             PICKS=$(python3 << 'EOF'
-          import re, html as h
+          import re, html as h, json, os
+          from datetime import datetime, timezone, timedelta
+
+          def get_name(code):
+              try:
+                  import urllib.request
+                  url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{code}.tw"
+                  with urllib.request.urlopen(url, timeout=5) as r:
+                      data = json.loads(r.read())
+                  return data['msgArray'][0]['n']
+              except Exception:
+                  return ""
+
+          PICKS_FILE = "artifacts/daily_picks.json"
+          yesterday_streaks = {}
+          if os.path.exists(PICKS_FILE):
+              try:
+                  with open(PICKS_FILE, "r") as f:
+                      saved = json.load(f)
+                  yesterday_streaks = saved.get("picks", {})
+              except Exception:
+                  pass
+
           with open('stock_report.html', 'r', encoding='utf-8') as f:
               txt = f.read()
+
           m = re.search(r'今日 AI 交易執行單.*?<tbody>(.*?)</tbody>', txt, re.S)
           if not m:
               print("今日無選股-解析失敗")
           else:
               rows = re.findall(r'<tr>(.*?)</tr>', m.group(1), re.S)
               out = []
+              today_streaks = {}
               for r in rows[:7]:
-                  cols = [h.unescape(re.sub('<.*?>', '', c)).strip() for c in re.findall(r'<td.*?>(.*?)</td>', r, re.S)]
-                  # cols: 0代號 1評分 2收盤 3狀態 4區間計畫(內含停利停損)
+                  cols = [h.unescape(re.sub('<.*?>', '', c)).strip()
+                          for c in re.findall(r'<td.*?>(.*?)</td>', r, re.S)]
                   if len(cols) >= 5:
+                      code = cols[0]
+                      prev = yesterday_streaks.get(code, 0)
+                      streak = prev + 1
+                      today_streaks[code] = streak
+                      name = get_name(code)
+                      streak_str = f"({streak})" if streak >= 2 else ""
+                      display = f"{code} {name}{streak_str}".strip()
                       plan = cols[4]
                       tp = re.search(r'停利[:：]\s*([\d\.]+)', plan)
                       sl = re.search(r'停損[:：]\s*([\d\.]+)', plan)
                       tp = tp.group(1) if tp else "?"
                       sl = sl.group(1) if sl else "?"
-                      out.append(f"{cols[0]} {cols[1]} | 分數:{cols[1]}")
+                      out.append(f"{display} | 分數:{cols[1]}")
                       out.append(f" 收盤:{cols[2]} | 停利:{tp} | 停損:{sl}\n")
+
+              os.makedirs("artifacts", exist_ok=True)
+              with open(PICKS_FILE, "w") as f:
+                  tz = timezone(timedelta(hours=8))
+                  json.dump({"date": datetime.now(tz).strftime("%Y-%m-%d"), "picks": today_streaks}, f)
+
               print('\n'.join(out) if out else "今日無選股-解析失敗")
           EOF
-            )
+          )
           else
             PICKS="今日無選股-找不到stock_report.html"
             DATE=$(date -u +%Y-%m-%d)
+            REPORT_SUFFIX="(未更動)"
+            REPORT_DATE=$(date -u +%Y-%m-%d)
           fi
-          jq -n --arg content "**tw_stocker 每日選股 ${DATE}**
+          jq -n \
+            --arg content "**tw_stocker 每日選股 ${DATE}**
           \`\`\`
           ${PICKS}
           \`\`\`
-          [完整回測報表](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)" '{content: $content}' | \
+          [AI 台股量化交易 v8.5 — ${REPORT_DATE}](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)${REPORT_SUFFIX}" \
+            '{content: $content}' | \
           curl -s -H "Content-Type: application/json" -X POST -d @- ${{ secrets.DISCORD_WEBHOOK_TRADING }}
-          
       - name: Check if quarterly (first week of Jan/Apr/Jul/Oct)
         id: check
         run: |
