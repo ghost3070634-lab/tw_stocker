@@ -110,24 +110,8 @@ jobs:
       - name: Discord Notify - 簡單版
         if: always()
         run: |
+          DATE=$(date -u +%Y-%m-%d)
           if [ -f "stock_report.html" ]; then
-            DATE=$(date -u +%Y-%m-%d)
-
-            # 從 HTML 內容抓報告日期
-            REPORT_DATE=$(python3 -c "
-          import re
-          with open('stock_report.html','r',encoding='utf-8') as f:
-              txt=f.read()
-          m=re.search(r'v8\.5[^\d]*(\d{4}-\d{2}-\d{2})', txt)
-          print(m.group(1) if m else '')
-          ")
-            # 比對報告日期與今天
-            if [ "$REPORT_DATE" = "$DATE" ]; then
-              REPORT_SUFFIX=""
-            else
-              REPORT_SUFFIX="(未更動)"
-            fi
-
             PICKS=$(python3 << 'EOF'
           import re, html as h, json, os
           import twstock
@@ -172,40 +156,21 @@ jobs:
           )
           else
             PICKS="今日無選股-找不到stock_report.html"
-            DATE=$(date -u +%Y-%m-%d)
-            REPORT_SUFFIX="(未更動)"
-            REPORT_DATE=$(date -u +%Y-%m-%d)
           fi
           jq -n \
             --arg content "**tw_stocker 每日選股 ${DATE}**
           \`\`\`
           ${PICKS}
           \`\`\`
-          [AI 台股量化交易 v8.5 — ${REPORT_DATE}](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)${REPORT_SUFFIX}" \
+          [AI 台股量化交易 v8.5 — ${DATE}](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)" \
             '{content: $content}' | \
           curl -s -H "Content-Type: application/json" -X POST -d @- ${{ secrets.DISCORD_WEBHOOK }}
 
       - name: Discord Notify - 進出場詳細版 v8.5
         if: always()
         run: |
+          DATE=$(date -u +%Y-%m-%d)
           if [ -f "stock_report.html" ]; then
-            DATE=$(date -u +%Y-%m-%d)
-
-            # 從 HTML 內容抓報告日期
-            REPORT_DATE=$(python3 -c "
-          import re
-          with open('stock_report.html','r',encoding='utf-8') as f:
-              txt=f.read()
-          m=re.search(r'v8\.5[^\d]*(\d{4}-\d{2}-\d{2})', txt)
-          print(m.group(1) if m else '')
-          ")
-            # 比對報告日期與今天
-            if [ "$REPORT_DATE" = "$DATE" ]; then
-              REPORT_SUFFIX=""
-            else
-              REPORT_SUFFIX="(未更動)"
-            fi
-
             PICKS=$(python3 << 'EOF'
           import re, html as h, json, os
           import twstock
@@ -269,16 +234,13 @@ jobs:
           )
           else
             PICKS="今日無選股-找不到stock_report.html"
-            DATE=$(date -u +%Y-%m-%d)
-            REPORT_SUFFIX="(未更動)"
-            REPORT_DATE=$(date -u +%Y-%m-%d)
           fi
           jq -n \
             --arg content "**tw_stocker 每日選股 ${DATE}**
           \`\`\`
           ${PICKS}
           \`\`\`
-          [AI 台股量化交易 v8.5 — ${REPORT_DATE}](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)${REPORT_SUFFIX}" \
+          [AI 台股量化交易 v8.5 — ${DATE}](https://ghost3070634-lab.github.io/tw_stocker/stock_report.html)" \
             '{content: $content}' | \
           curl -s -H "Content-Type: application/json" -X POST -d @- ${{ secrets.DISCORD_WEBHOOK_TRADING }}
       - name: Check if quarterly (first week of Jan/Apr/Jul/Oct)
@@ -343,5 +305,3 @@ jobs:
           git rebase --autostash origin/${{ github.ref_name }}
 
           git push origin HEAD:${{ github.ref_name }}
-          
-
