@@ -1439,6 +1439,13 @@
       "capital": 180356.0,
       "n_positions": 0,
       "n_closed_today": 1
+    },
+    {
+      "date": "2026-11-23",
+      "equity": 180356.0,
+      "capital": 180356.0,
+      "n_positions": 0,
+      "n_closed_today": 0
     }
   ],
   "daily_signals": [
@@ -3239,6 +3246,13 @@
         "2886",
         "3045",
         "2892"
+      ]
+    },
+    {
+      "date": "2026-11-23",
+      "tickers": [
+        "2618",
+        "2886"
       ]
     }
   ]
